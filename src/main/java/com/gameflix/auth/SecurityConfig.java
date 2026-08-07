@@ -1,13 +1,24 @@
 package com.gameflix.auth;
 
+import java.io.IOException;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.filter.OncePerRequestFilter;
 
-import jakarta.servlet.DispatcherType;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+//import jakarta.servlet.DispatcherType;
 
 
 /**
@@ -18,26 +29,46 @@ import jakarta.servlet.DispatcherType;
  * bean used to securely salt and hash user passwords.
  */
 @Configuration
-public class SecurityConfig {
+public class SecurityConfig extends OncePerRequestFilter {
 
+	private final JwtAuthenticationFilter jwtFilter;
+	
+	public SecurityConfig(JwtAuthenticationFilter jwtFilter) {
+        this.jwtFilter = jwtFilter;
+    }
+	
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(); // Must Use BCrypt
     }
     
 
-
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(csrf -> csrf.disable())
+            .csrf(AbstractHttpConfigurer::disable)
+            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Allow internal dispatches (e.g. when Spring forwards an exception to /error)
-                .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD).permitAll()
-                // Explicitly permit public endpoints, actuator, and the error handler
-                .requestMatchers("/register", "/login", "/actuator", "/actuator/**", "/error").permitAll()
+            	// Permit /api/auth/** AND root /login, /register
+                .requestMatchers("/api/auth/login", "/api/auth/register", "/login", "/register", "/error").permitAll() // Explicitly allow these two paths
                 .anyRequest().authenticated()
-            );
+            )
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+
         return http.build();
+    }
+
+	@Override
+	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+			throws ServletException, IOException {
+		// TODO Auto-generated method stub
+		
+	}
+	
+	@Override
+    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+        String path = request.getRequestURI();
+        // Skip JWT validation for public authentication endpoints
+        return path.startsWith("/api/auth/") || path.equals("/login") || path.equals("/register");
     }
 }

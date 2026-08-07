@@ -12,39 +12,52 @@ import java.util.Map;
  * payloads, validates base inputs, and coordinates appropriate HTTP status response codes.
  */
 @RestController
+@RequestMapping("/api/auth")
 public class AuthController {
 
 	// Variables
     @Autowired
     private UserService userService;
 
-    @PostMapping("/register") // Regitser Service Logic
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @PostMapping("/register") // Full route: /api/auth/register
     public ResponseEntity<?> register(@RequestBody Map<String, String> request) {
         String username = request.get("username");
-        String password = request.get("password"); // temp vars set to inbound JSON txt
+        String password = request.get("password");
 
         if (username == null || password == null || username.trim().isEmpty() || password.trim().isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "Invalid input data")); // Fail condition based off entry
+            return ResponseEntity.badRequest().body(Map.of("message", "Invalid input data"));
         }
 
-        boolean success = userService.registerUser(username, password); // Valid User & Pass
+        boolean success = userService.registerUser(username, password);
         if (success) {
-            return ResponseEntity.ok(Map.of("message", "User registered successfully")); // Success, registered in the repo
+            return ResponseEntity.ok(Map.of("message", "User registered successfully"));
         } else {
-            return ResponseEntity.badRequest().body(Map.of("message", "Username already exists")); // Exists in the repo
+            return ResponseEntity.badRequest().body(Map.of("message", "Username already exists"));
         }
     }
 
-    @PostMapping("/login") // Login Service Logic
+    @PostMapping("/login") // Full route: /api/auth/login
     public ResponseEntity<?> login(@RequestBody Map<String, String> request) {
         String username = request.get("username");
-        String password = request.get("password"); // temp vars ^
+        String password = request.get("password");
 
-        boolean authenticated = userService.authenticateUser(username, password); // send to authenticateUser Method
+        boolean authenticated = userService.authenticateUser(username, password);
         if (authenticated) {
-            return ResponseEntity.ok(Map.of("message", "Login successful")); // Send through to PostMan, Success!
+            String token = jwtUtil.generateToken(username);
+            return ResponseEntity.ok(Map.of(
+                "token", token, // Shows generated JWT 
+                "message", "Login successful"
+            ));
         } else {
-            return ResponseEntity.status(401).body(Map.of("message", "Invalid username or password")); // Fail Condition
+            return ResponseEntity.status(401).body(Map.of("message", "Invalid username or password"));
         }
+    }
+    
+    @GetMapping("/test-protected")
+    public ResponseEntity<?> testProtected() {
+        return ResponseEntity.ok(Map.of("message", "Access granted! Token is valid."));
     }
 }
